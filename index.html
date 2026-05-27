@@ -5,23 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INDRA AI</title>
     <style>
-        /* Gemini Inspired Clean Minimal Design */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
         body {
-            background-color: #131314; /* Dark clean theme like Gemini */
+            background-color: #131314;
             color: #e3e3e3;
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
 
-        /* Header Area */
         header {
             padding: 20px;
             text-align: center;
@@ -36,24 +34,23 @@
             letter-spacing: 1px;
         }
 
-        /* Chat Window */
         .chat-container {
             flex: 1;
             overflow-y: auto;
             padding: 20px max(5%, 20px);
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 24px;
         }
 
-        /* Message Bubbles */
         .message {
             max-width: 85%;
             padding: 14px 18px;
             border-radius: 18px;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            position: relative;
+            font-size: 0.98rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .user-msg {
@@ -68,7 +65,6 @@
             padding-left: 0;
         }
 
-        /* Chota sa source badge nicche */
         .ai-source {
             display: block;
             font-size: 11px;
@@ -76,9 +72,9 @@
             margin-top: 8px;
             font-weight: bold;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        /* Floating Input Bar System */
         .input-area {
             padding: 20px max(5%, 20px);
             background-color: #131314;
@@ -89,19 +85,18 @@
             border-radius: 30px;
             display: flex;
             align-items: center;
-            padding: 6px 15px;
+            padding: 10px 20px;
             max-width: 800px;
             margin: 0 auto;
             border: 1px solid #3c4043;
         }
 
-        /* Dropdown Setup */
         .model-select {
             background: transparent;
             color: #c4c7c5;
             border: none;
             outline: none;
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             cursor: pointer;
             padding-right: 10px;
             border-right: 1px solid #3c4043;
@@ -121,22 +116,16 @@
             color: #e3e3e3;
             resize: none;
             height: 24px;
-            font-size: 0.95rem;
-            padding-top: 2px;
+            font-size: 0.98rem;
         }
 
         .send-btn {
             background: transparent;
             border: none;
-            color: #747775;
-            cursor: pointer;
-            font-size: 1.2rem;
-            padding: 0 5px;
-            transition: color 0.2s;
-        }
-
-        .send-btn:hover {
             color: #a8c7fa;
+            cursor: pointer;
+            font-size: 1.3rem;
+            padding-left: 10px;
         }
     </style>
 </head>
@@ -148,7 +137,7 @@
 
     <div class="chat-container" id="chatContainer">
         <div class="message ai-msg">
-            Hi, main Indra hoon. Mujhe batao aaj kya dhamal karna hai?
+            Hi, main Indra hoon. Sabhi core networks patched hain. Poochho kya poochna hai?
         </div>
     </div>
 
@@ -165,7 +154,6 @@
             </select>
 
             <textarea id="userInput" placeholder="Ask Indra..."></textarea>
-
             <button class="send-btn" id="sendBtn">➤</button>
         </div>
     </div>
@@ -178,38 +166,43 @@
 
         sendBtn.addEventListener('click', async () => {
             const text = userInput.value.trim();
-            if(!text) return;
+            if (!text) return;
 
-            // 1. User ka message screen par daalo
             appendMessage(text, 'user-msg');
             userInput.value = '';
 
-            // 2. Selected AI model check karo
             const selectedModel = modelSelector.value;
+            
+            // Temporary Loader bubble
+            const loaderId = appendMessage("Indra is processing...", 'ai-msg', 'System');
 
-            // 3. Backend se connect karne ka logic (Backend API route)
             try {
-                // Yahan aapka real server url aayega jab deploy hoga
                 const response = await fetch('/api/chat', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt: text, specificAI: selectedModel })
                 });
+                
                 const data = await response.json();
                 
-                // AI ka answer screen par chipkao source ke sath
+                // Remove loader and put actual text
+                document.getElementById(loaderId).remove();
                 appendMessage(data.answer, 'ai-msg', data.source);
+                
             } catch (err) {
-                appendMessage("Backend se connection nahi ho paya bhai!", 'ai-msg', 'By System');
+                document.getElementById(loaderId).remove();
+                appendMessage("Network response fail ho gaya bhai.", 'ai-msg', 'System Error');
             }
         });
 
         function appendMessage(text, className, source = '') {
+            const id = 'msg-' + Math.random().toString(36).substr(2, 9);
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${className}`;
+            msgDiv.id = id;
             msgDiv.innerText = text;
 
-            if(source) {
+            if (source) {
                 const sourceBadge = document.createElement('span');
                 sourceBadge.className = 'ai-source';
                 sourceBadge.innerText = source;
@@ -217,8 +210,10 @@
             }
 
             chatContainer.appendChild(msgDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight; // Auto scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return id;
         }
     </script>
 </body>
 </html>
+
