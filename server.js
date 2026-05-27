@@ -1,65 +1,76 @@
-// NEW CRASH-PROOF INDRA LOGIC
-async function handleIndraRequest(userPrompt, specificAI = null) {
-    if (specificAI) {
-        return await fetchSingleAI(specificAI, userPrompt);
-    }
+const express = require('express');
+const path = require('path');
+const axios = require('axios');
+const app = express();
 
-    console.log("Indra is analyzing the core networks...");
-    const activeModels = ['chatgpt', 'claude', 'gemini', 'deepseek', 'perplexity', 'grok'];
-    
-    // Promise.all ko hata kar humne safe mapper lagaya hai
-    const promises = activeModels.map(async (model) => {
-        try {
-            let res = await fetchSingleAI(model, userPrompt);
-            // Agar kisi model ne internally error diya toh use filter karenge
-            if (res.answer.includes("responded with an error") || res.answer.includes("timed out")) {
-                return { model, answer: null };
-            }
-            return { model, answer: res.answer };
-        } catch (e) {
-            return { model, answer: null };
-        }
-    });
+const PORT = process.env.PORT || 3000;
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
 
-    const results = await Promise.all(promises);
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
-    let answersSheet = {};
-    let validModels = [];
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-    results.forEach(item => {
-        if (item.answer !== null) {
-            answersSheet[item.model] = item.answer;
-            validModels.push(item.model);
-        }
-    });
-
-    // Agar saare hi models fail ho gaye tabhi final error aayega
-    if (validModels.length === 0) {
-        return {
-            answer: "Bhai, lagta hai aapki saari API keys mein balance khatam hai ya galat hain. Ek baar Render par keys check karo!",
-            source: "System Error"
-        };
-    }
-
-    // Indra sirf unhi models mein se chunega jo sahi chal rahe hain!
-    const bestAIModel = await indraBrainEvaluation(userPrompt, answersSheet, validModels);
-
-    return {
-        answer: answersSheet[bestAIModel],
-        source: `By ${bestAIModel.toUpperCase()}`
-    };
-}
-
-// Updated Evaluation Layer to handle dynamic valid models
-async function indraBrainEvaluation(originalPrompt, answersSheet, validModels) {
-    const evaluationPrompt = `You are INDRA. Analyze these responses for the prompt "${originalPrompt}" and return ONLY the winner name key from this exact list: [${validModels.join(', ')}]. Responses: ${JSON.stringify(answersSheet)}`;
+app.post('/api/chat', async (req, res) => {
     try {
-        const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_KEY}`);
-        const winner = res.data.candidates[0].content.parts[0].text.trim().toLowerCase();
-        return validModels.includes(winner) ? winner : validModels[0];
+        const { prompt, specificAI } = req.body;
+        
+        // Single Model Mode
+        if (specificAI) {
+            const reply = await fetchSingleAI(specificAI, prompt);
+            return res.json({ answer: reply, source: `By ${specificAI.toUpperCase()}` });
+        }
+
+        // Indra Mode: Jo sabse pehle chal jaye (Fastest Winner)
+        const activeModels = ['chatgpt', 'claude', 'gemini', 'deepseek'];
+        const promises = activeModels.map(async (model) => {
+            const ans = await fetchSingleAI(model, prompt);
+            if (ans && !ans.includes("error")) return { model, ans };
+            throw new Error();
+        });
+
+        // Jo pehla model sahi jawab dega, use utha lo
+        const winner = await Promise.any(promises);
+        res.json({ answer: winner.ans, source: `By ${winner.model.toUpperCase()}` });
+
+    } catch (error) {
+        res.json({ answer: "Bhai, ya toh saari keys ka balance khatam hai ya URL block hai. Ek baar specific model select karke check karo.", source: "System" });
+    }
+});
+
+async function fetchSingleAI(modelName, prompt) {
+    try {
+        if (modelName === 'chatgpt') {
+            const res = await axios.post('https://api.openai.com/v1/chat/completions', {
+                model: 'gpt-4o', messages: [{ role: 'user', content: prompt }]
+            }, { headers: { 'Authorization': `Bearer ${OPENAI_KEY}` } });
+            return res.data.choices[0].message.content;
+        }
+        if (modelName === 'gemini') {
+            const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_KEY}`, {
+                contents: [{ parts: [{ text: prompt }] }]
+            });
+            return res.data.candidates[0].content.parts[0].text;
+        }
+        if (modelName === 'claude') return await callOpenRouter('anthropic/claude-3.5-sonnet', prompt);
+        if (modelName === 'deepseek') return await callOpenRouter('deepseek/deepseek-chat', prompt);
     } catch (e) {
-        return validModels[0]; // Fallback to first working model
+        return "error";
     }
 }
+
+async function callOpenRouter(modelId, prompt) {
+    const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: modelId, messages: [{ role: 'user', content: prompt }]
+    }, { headers: { 'Authorization': `Bearer ${OPENROUTER_KEY}` } });
+    return res.data.choices[0].message.content;
+}
+
+app.listen(PORT, () => console.log(`Server live on ${PORT}`));
+
 
 
