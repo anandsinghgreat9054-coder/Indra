@@ -1,5 +1,5 @@
 {
-  "name": "yt-downloader",
+  "name": "yt-local-downloader",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
@@ -7,7 +7,9 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "@distube/ytdl-core": "^4.15.1"
   }
 }
+
 
