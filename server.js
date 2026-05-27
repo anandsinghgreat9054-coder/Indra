@@ -1,22 +1,44 @@
-// INDRA AI - Multi-Provider Smart Aggregator
+const express = require('express');
+const path = require('path');
 const axios = require('axios');
+const app = express();
 
-// 1. API Keys Configuration (Environment Variables)
+// Render par port dynamic hota hai, isliye process.env.PORT zaroori hai
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+
+// HTML aur static files ko serve karne ka sahi rasta
+app.use(express.static(path.join(__dirname)));
+
+// API Keys Configuration
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
-// 2. Main Controller
+// Base Route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Chat Route
+app.post('/api/chat', async (req, res) => {
+    try {
+        const { prompt, specificAI } = req.body;
+        const result = await handleIndraRequest(prompt, specificAI);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ answer: "Indra ke dimaag mein thoda load aa gaya!", source: "System Error" });
+    }
+});
+
+// Main Core Logic
 async function handleIndraRequest(userPrompt, specificAI = null) {
-    
-    // Target Mode: Agar user ne dropdown se koi ek AI select kiya hai
     if (specificAI) {
         return await fetchSingleAI(specificAI, userPrompt);
     }
 
-    // "INDRA MODE" (Default): Top 6 models ka parallel analysis shuru
     console.log("Indra is analyzing the core networks...");
-    
     const activeModels = ['chatgpt', 'claude', 'gemini', 'deepseek', 'perplexity', 'grok'];
     const promises = activeModels.map(model => fetchSingleAI(model, userPrompt));
     const responses = await Promise.all(promises);
@@ -26,7 +48,6 @@ async function handleIndraRequest(userPrompt, specificAI = null) {
         answersSheet[model] = responses[index].answer;
     });
 
-    // Indra ka dimaag faisla karega ki sabse best answer kiska hai
     const bestAIModel = await indraBrainEvaluation(userPrompt, answersSheet);
 
     return {
@@ -35,24 +56,23 @@ async function handleIndraRequest(userPrompt, specificAI = null) {
     };
 }
 
-// 3. Router Matrix: Alag-Alag Provider Se Data Khinchne Ke Liye
+// Multi-Provider Fetcher
 async function fetchSingleAI(modelName, prompt) {
     try {
         switch (modelName) {
-            case 'chatgpt': // Asli OpenAI API
+            case 'chatgpt':
                 const reqOpenAI = await axios.post('https://api.openai.com/v1/chat/completions', {
                     model: 'gpt-4o',
                     messages: [{ role: 'user', content: prompt }]
                 }, { headers: { 'Authorization': `Bearer ${OPENAI_KEY}` } });
                 return { answer: reqOpenAI.data.choices[0].message.content };
 
-            case 'gemini': // Asli Google AI Studio API
+            case 'gemini':
                 const reqGoogle = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GOOGLE_KEY}`, {
                     contents: [{ parts: [{ text: prompt }] }]
                 });
                 return { answer: reqGoogle.data.candidates[0].content.parts[0].text };
 
-            // Baki saare OpenRouter se chalenge
             case 'claude': return { answer: await callOpenRouter('anthropic/claude-3.5-sonnet', prompt) };
             case 'deepseek': return { answer: await callOpenRouter('deepseek/deepseek-chat', prompt) };
             case 'perplexity': return { answer: await callOpenRouter('perplexity/sonar-reasoning', prompt) };
@@ -61,11 +81,11 @@ async function fetchSingleAI(modelName, prompt) {
             default: return { answer: "Model not found." };
         }
     } catch (err) {
-        return { answer: `${modelName.toUpperCase()} node timed out.` };
+        return { answer: `${modelName.toUpperCase()} responded with an error.` };
     }
 }
 
-// 4. OpenRouter Helper
+// OpenRouter Call Helper
 async function callOpenRouter(modelId, prompt) {
     const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
         model: modelId,
@@ -74,7 +94,7 @@ async function callOpenRouter(modelId, prompt) {
     return res.data.choices[0].message.content;
 }
 
-// 5. Indra's Judgment Layer (Using Free Gemini Flash on Google API to save cost)
+// Indra Brain Decision (Using Gemini Flash)
 async function indraBrainEvaluation(originalPrompt, answersSheet) {
     const evaluationPrompt = `You are INDRA. Analyze these responses for the prompt "${originalPrompt}" and return ONLY the winner name key from this list: [chatgpt, claude, gemini, deepseek, perplexity, grok]. Responses: ${JSON.stringify(answersSheet)}`;
     try {
@@ -87,3 +107,7 @@ async function indraBrainEvaluation(originalPrompt, answersSheet) {
         return 'chatgpt';
     }
 }
+
+// Server port verification link for Render
+app.listen(PORT, () => console.log(`Indra AI is live on port ${PORT}!`));
+
